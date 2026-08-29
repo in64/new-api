@@ -45,6 +45,8 @@ var buildFS embed.FS
 //go:embed web/dist/index.html
 var indexPage []byte
 
+const serverHost = "127.0.0.1"
+
 func main() {
 	startTime := time.Now()
 	kitutil.SetLogging(common.SysLog, func(message string) {
@@ -205,7 +207,7 @@ func main() {
 	}
 
 	srv := &http.Server{
-		Addr:    ":" + port,
+		Addr:    serverHost + ":" + port,
 		Handler: server,
 	}
 
