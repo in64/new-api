@@ -46,6 +46,8 @@ var buildFS embed.FS
 //go:embed web/dist/index.html
 var indexPage []byte
 
+const serverHost = "127.0.0.1"
+
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "plugin" {
 		os.Exit(jsplugin.RunCLI(os.Args[2:], os.Stdout, os.Stderr))
@@ -210,7 +212,7 @@ func main() {
 	}
 
 	srv := &http.Server{
-		Addr:    ":" + port,
+		Addr:    serverHost + ":" + port,
 		Handler: server,
 	}
 
