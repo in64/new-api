@@ -18,6 +18,7 @@ fery_linux_amd64_sha256=954d5f8ee16c161e83349a0d82f7200e8312cdbc1463782a6b952cab
 usage() {
   echo '用法: seiya-release.sh build <dist-dir>' >&2
   echo '      seiya-release.sh verify-local <dist-dir>' >&2
+  echo '      seiya-release.sh verify-identity' >&2
   echo '      seiya-release.sh install-fery <destination>' >&2
   echo '      seiya-release.sh publish <dist-dir> <fery>' >&2
   echo '      seiya-release.sh verify-remote <dist-dir>' >&2
@@ -53,13 +54,40 @@ source_files_json() {
     --repo "$repo_root" --commit "$release_commit"
 }
 
-load_release_identity() {
-  local dirty
-  release_commit=$(git -C "$repo_root" rev-parse HEAD) || return
-  test "$(git -C "$repo_root" rev-parse "refs/tags/$release_tag^{commit}")" = "$release_commit" || {
-    echo "发布 tag $release_tag 必须精确指向当前提交" >&2
+validate_release_commit() {
+  local commit
+  commit=$1
+  test "${#commit}" -eq 40 || return 1
+  case "$commit" in
+    *[!0-9a-f]*) return 1 ;;
+  esac
+}
+
+validate_release_identity_values() {
+  local expected head tag_commit
+  expected=$1
+  head=$2
+  tag_commit=$3
+  validate_release_commit "$expected" || {
+    echo 'SEIYA_RELEASE_COMMIT 必须是 40 位小写十六进制 commit' >&2
     return 1
   }
+  test "$head" = "$expected" || {
+    echo "当前 HEAD 与本次运行锁定的 commit 不一致: $head" >&2
+    return 1
+  }
+  test "$tag_commit" = "$expected" || {
+    echo "发布 tag $release_tag 已移动: $tag_commit" >&2
+    return 1
+  }
+}
+
+load_release_identity() {
+  local dirty expected tag_commit
+  expected=${SEIYA_RELEASE_COMMIT:-}
+  release_commit=$(git -C "$repo_root" rev-parse HEAD) || return
+  tag_commit=$(git -C "$repo_root" rev-parse "refs/tags/$release_tag^{commit}") || return
+  validate_release_identity_values "$expected" "$release_commit" "$tag_commit" || return
   dirty=$(git -C "$repo_root" status --porcelain --untracked-files=all)
   test -z "$dirty" || {
     echo '发布源码工作树不干净' >&2
@@ -561,6 +589,10 @@ main() {
     verify-local)
       test "$#" -eq 2 || usage
       verify_local "$2"
+      ;;
+    verify-identity)
+      test "$#" -eq 1 || usage
+      load_release_identity
       ;;
     install-fery)
       test "$#" -eq 2 || usage

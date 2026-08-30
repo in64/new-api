@@ -28,6 +28,34 @@ source "$script_dir/seiya-release.sh"
 repo_root=$(cd -- "$script_dir/../.." && pwd)
 test "$cdn_origin" = https://fery.seiya.dev
 
+locked_commit=0123456789abcdef0123456789abcdef01234567
+moved_commit=89abcdef0123456789abcdef0123456789abcdef
+validate_release_identity_values "$locked_commit" "$locked_commit" "$locked_commit"
+if validate_release_identity_values "$locked_commit" "$locked_commit" "$moved_commit" \
+  >/dev/null 2>&1; then
+  echo '发布 tag 移动后错误接受本次运行锁定的 commit' >&2
+  exit 1
+fi
+if validate_release_identity_values "$locked_commit" "$moved_commit" "$locked_commit" \
+  >/dev/null 2>&1; then
+  echo 'HEAD 偏离本次运行锁定的 commit 后错误接受' >&2
+  exit 1
+fi
+for invalid_commit in '' 0123456789abcdef0123456789abcdef0123456 \
+  0123456789abcdef0123456789abcdef0123456G; do
+  if validate_release_commit "$invalid_commit"; then
+    echo "非法 SEIYA_RELEASE_COMMIT 被错误接受: $invalid_commit" >&2
+    exit 1
+  fi
+done
+workflow_file="$repo_root/.github/workflows/seiya-release.yml"
+# shellcheck disable=SC2016 # 这里匹配 GitHub expression 字面量。
+grep -Fq 'release_commit: ${{ steps.lock.outputs.release_commit }}' "$workflow_file"
+# shellcheck disable=SC2016 # 这里匹配 GitHub expression 字面量。
+test "$(grep -Fc 'ref: ${{ needs.guard.outputs.release_commit }}' "$workflow_file")" -eq 2
+grep -Fq 'git fetch --force --no-tags origin' "$workflow_file"
+test "$(grep -Fc '.github/scripts/seiya-release.sh verify-identity' "$workflow_file")" -eq 2
+
 assert_clean_test_tree() {
   test ! -e "$script_dir/__pycache__"
   test -z "$(git -C "$repo_root" status --porcelain --untracked-files=all)"
