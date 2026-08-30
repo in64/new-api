@@ -9,6 +9,7 @@ build
 *.db-journal
 logs
 web/dist
+/dist
 web/node_modules
 .env
 one-api

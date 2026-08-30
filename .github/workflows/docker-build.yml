@@ -5,6 +5,7 @@ on:
     tags:
       - '*'
       - '!nightly*'
+      - '!*-seiya.*'
   workflow_dispatch:
     inputs:
       tag:
