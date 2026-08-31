@@ -55,6 +55,25 @@ grep -Fq 'release_commit: ${{ steps.lock.outputs.release_commit }}' "$workflow_f
 test "$(grep -Fc 'ref: ${{ needs.guard.outputs.release_commit }}' "$workflow_file")" -eq 2
 grep -Fq 'git fetch --force --no-tags origin' "$workflow_file"
 test "$(grep -Fc '.github/scripts/seiya-release.sh verify-identity' "$workflow_file")" -eq 2
+# shellcheck disable=SC2016 # 这里匹配 GitHub expression 字面量。
+grep -Fq "if: \${{ github.event_name == 'workflow_dispatch' && inputs.publish }}" "$workflow_file"
+grep -Fq 'test "$release_commit" = "$SELECTED_COMMIT"' "$workflow_file"
+grep -Fq 'EXPECTED_MANIFEST: ${{ inputs.expected_manifest_sha256 }}' "$workflow_file"
+if grep -Eq '^[[:space:]]*uses: [^#]+@v[0-9]' "$workflow_file"; then
+  echo '发布 workflow 含未铆钉到 commit 的 Action' >&2
+  exit 1
+fi
+
+tailwind_css="$repo_root/web/src/styles/index.css"
+grep -Fq "@import 'tailwindcss' source(none);" "$tailwind_css"
+grep -Fq "@source '../../index.html';" "$tailwind_css"
+grep -Fq "@source '../**/*.{js,jsx,ts,tsx}';" "$tailwind_css"
+grep -Fq "@source not '../**/__tests__';" "$tailwind_css"
+grep -Fq "@source not '../**/*.test.*';" "$tailwind_css"
+if grep -Fxq "@import 'tailwindcss';" "$tailwind_css"; then
+  echo 'Tailwind 自动扫描未关闭' >&2
+  exit 1
+fi
 
 assert_clean_test_tree() {
   test ! -e "$script_dir/__pycache__"
@@ -63,7 +82,8 @@ assert_clean_test_tree() {
 assert_clean_test_tree
 
 test_root=$(mktemp -d "$repo_root/.git/seiya-release-test.XXXXXX")
-trap 'rm -rf -- "$test_root"' EXIT
+outside_root=''
+trap 'rm -rf -- "$test_root"; if [ -n "${outside_root:-}" ]; then rm -rf -- "$outside_root"; fi' EXIT
 export FAKE_CDN_STORE="$test_root/store"
 export FAKE_FERY_LOG="$test_root/fery.log"
 export cdn_origin=https://test.invalid
@@ -151,11 +171,12 @@ files = (
     "relaykit/dto/audio.go",
     "relaykit/go.mod",
     "relaykit/go.sum",
-    "web/scripts/sync-i18n.mjs",
-    "web/src/lib/auth-session.test.ts",
+    "web/bun.lock",
+    "web/index.html",
+    "web/rsbuild.config.ts",
     "web/src/main.tsx",
-    "web/src/test-setup.ts",
-    "web/vitest.config.ts",
+    "web/src/styles/index.css",
+    "web/tsconfig.json",
 )
 records = {}
 for relative in files:
@@ -173,7 +194,7 @@ import sys
 document = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
 assert set(document) == {"schema_version", "name", "version", "source", "inputs", "targets"}
 assert document["name"] == "new-api"
-assert document["version"] == "1.0.0-rc.27-seiya.1"
+assert document["version"] == "1.0.0-rc.27-seiya.2"
 assert set(document["source"]) == {"repository", "commit", "tag"}
 assert set(document["inputs"]) == {
     "toolchains", "source_date_epoch", "source_files", "build", "files"
@@ -183,26 +204,27 @@ source_files = document["inputs"]["source_files"]
 assert "main.go" in source_files
 assert "relaykit/dto/audio.go" in source_files
 assert "web/src/main.tsx" in source_files
+assert "web/src/styles/index.css" in source_files
 assert "i18n/locales/en.yaml" in source_files
 assert "common/quota_math_test.go" not in source_files
-assert "web/src/test-setup.ts" in source_files
-assert "web/src/lib/auth-session.test.ts" in source_files
-assert "web/vitest.config.ts" in source_files
-assert "web/scripts/sync-i18n.mjs" in source_files
+assert "web/src/test-setup.ts" not in source_files
+assert "web/src/lib/auth-session.test.ts" not in source_files
+assert "web/rsbuild.config.ts" in source_files
+assert "web/index.html" in source_files
 assert ".github/scripts/seiya-release.sh" in source_files
 build = document["inputs"]["build"]
 assert build["source"] == {"kind": "git-archive", "commit": document["source"]["commit"]}
 assert build["frontend"]["install"] == [
     "bun", "install", "--frozen-lockfile", "--registry", "https://registry.npmmirror.com"
 ]
-assert build["frontend"]["environment"]["BUN_TMPDIR"] == "<dist-dir>/.build-tmp.XXXXXX/tmp"
-assert build["frontend"]["environment"]["TMPDIR"] == "<dist-dir>/.build-tmp.XXXXXX/tmp"
+assert build["frontend"]["environment"]["BUN_TMPDIR"] == "<repo-root>/.seiya-release-build.XXXXXX/tmp"
+assert build["frontend"]["environment"]["TMPDIR"] == "<repo-root>/.seiya-release-build.XXXXXX/tmp"
 assert build["frontend"]["environment"]["VITE_REACT_APP_VERSION"] == document["version"]
 assert build["go"]["flags"] == ["-mod=readonly", "-trimpath", "-buildvcs=false"]
 assert build["go"]["environment"]["GOFLAGS"] == ""
 assert build["go"]["environment"]["GOPROXY"] == "https://goproxy.cn,direct"
 assert build["go"]["environment"]["GOTOOLCHAIN"] == "local"
-assert build["go"]["environment"]["TMPDIR"] == "<dist-dir>/.build-tmp.XXXXXX/tmp"
+assert build["go"]["environment"]["TMPDIR"] == "<repo-root>/.seiya-release-build.XXXXXX/tmp"
 assert build["go"]["targets"] == {"linux-amd64": "amd64", "linux-arm64": "arm64"}
 assert set(document["targets"]) == {"linux-amd64", "linux-arm64"}
 for target in document["targets"].values():

@@ -5,8 +5,8 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd -- "$script_dir/../.." && pwd)
 cdn_origin=https://fery.seiya.dev
 repository=in64/new-api
-release_tag=v1.0.0-rc.27-seiya.1
-service_version=1.0.0-rc.27-seiya.1
+release_tag=v1.0.0-rc.27-seiya.2
+service_version=1.0.0-rc.27-seiya.2
 go_version=1.25.1
 go_proxy=https://goproxy.cn,direct
 bun_version=1.4.0
@@ -192,10 +192,10 @@ document = {
                 ],
                 "command": ["bun", "run", "build"],
                 "environment": {
-                    "BUN_TMPDIR": "<dist-dir>/.build-tmp.XXXXXX/tmp",
+                    "BUN_TMPDIR": "<repo-root>/.seiya-release-build.XXXXXX/tmp",
                     "CI": "",
                     "DISABLE_ESLINT_PLUGIN": "true",
-                    "TMPDIR": "<dist-dir>/.build-tmp.XXXXXX/tmp",
+                    "TMPDIR": "<repo-root>/.seiya-release-build.XXXXXX/tmp",
                     "VITE_REACT_APP_VERSION": os.environ["SEIYA_MANIFEST_VERSION"],
                 },
             },
@@ -210,7 +210,7 @@ document = {
                     "GOTOOLCHAIN": "local",
                     "GOWORK": "off",
                     "SOURCE_DATE_EPOCH": os.environ["SEIYA_MANIFEST_SOURCE_EPOCH"],
-                    "TMPDIR": "<dist-dir>/.build-tmp.XXXXXX/tmp",
+                    "TMPDIR": "<repo-root>/.seiya-release-build.XXXXXX/tmp",
                 },
                 "ldflags": [
                     "-s",
@@ -267,7 +267,7 @@ verify_local() {
   validate_manifest "$dist_dir" || return
 }
 
-build_release() {
+build_release() (
   local dist_dir build_tmp build_source build_work_tmp build_epoch arch output ldflags
   dist_dir=$1
   load_release_identity || return
@@ -280,16 +280,20 @@ build_release() {
     "$dist_dir/new-api/release.json" || return
   build_epoch=$(git -C "$repo_root" show -s --format=%ct HEAD) || return
   ldflags="-s -w -buildid= -X github.com/QuantumNous/new-api/common.Version=$service_version"
-  build_tmp=$(mktemp -d "$dist_dir/.build-tmp.XXXXXX") || return
+  build_tmp=$(mktemp -d "$repo_root/.seiya-release-build.XXXXXX") || return
+  case "$build_tmp" in
+    "$repo_root"/.seiya-release-build.*) ;;
+    *)
+      echo "构建临时目录越过项目边界: $build_tmp" >&2
+      return 1
+      ;;
+  esac
+  trap 'rm -rf -- "$build_tmp"' EXIT
   build_source=$build_tmp/source
   build_work_tmp=$build_tmp/tmp
-  if ! mkdir -p "$build_source" "$build_work_tmp"; then
-    rm -rf -- "$build_tmp"
-    return 1
-  fi
+  mkdir -p "$build_source" "$build_work_tmp" || return
   if ! git -C "$repo_root" archive --format=tar "$release_commit" \
     | tar -xf - -C "$build_source"; then
-    rm -rf -- "$build_tmp"
     return 1
   fi
 
@@ -299,7 +303,6 @@ build_release() {
       && bun install --frozen-lockfile --registry "$npm_registry" \
       && CI='' DISABLE_ESLINT_PLUGIN=true VITE_REACT_APP_VERSION=$service_version bun run build
   ); then
-    rm -rf -- "$build_tmp"
     return 1
   fi
 
@@ -312,23 +315,17 @@ build_release() {
           SOURCE_DATE_EPOCH=$build_epoch TMPDIR=$build_work_tmp \
           go build -mod=readonly -trimpath -buildvcs=false -ldflags "$ldflags" -o "$output" .
     ); then
-      rm -rf -- "$build_tmp"
       return 1
     fi
-    if ! chmod 0755 "$output"; then
-      rm -rf -- "$build_tmp"
-      return 1
-    fi
+    chmod 0755 "$output" || return
   done
   if ! install -m 0644 "$build_source/LICENSE" "$dist_dir/new-api/LICENSE" \
     || ! install -m 0644 "$build_source/NOTICE" "$dist_dir/new-api/NOTICE" \
     || ! write_manifest "$dist_dir" \
     || ! verify_local "$dist_dir"; then
-    rm -rf -- "$build_tmp"
     return 1
   fi
-  rm -rf -- "$build_tmp"
-}
+)
 
 verify_cdn() {
   local file relative expected temporary attempt

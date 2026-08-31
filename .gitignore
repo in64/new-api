@@ -10,6 +10,7 @@ build
 logs
 web/dist
 /dist
+/.seiya-release-build.*
 web/node_modules
 .env
 one-api

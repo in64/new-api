@@ -57,8 +57,21 @@ EXPLICIT_FILES = {
     "relaykit/go.mod",
     "relaykit/go.sum",
     "web/.gitignore",
+    "web/.npmrc",
+    "web/bun.lock",
+    "web/index.html",
+    "web/package.json",
+    "web/rsbuild.config.ts",
+    "web/tsconfig.app.json",
+    "web/tsconfig.json",
+    "web/tsconfig.node.json",
 }
-GENERATED_PREFIXES = ("dist/", "web/dist/", "web/node_modules/")
+GENERATED_PREFIXES = (
+    ".seiya-release-build.",
+    "dist/",
+    "web/dist/",
+    "web/node_modules/",
+)
 
 
 def git(repo: pathlib.Path, *arguments: str) -> bytes:
@@ -90,8 +103,23 @@ def decode_json_stream(output: str) -> list[dict]:
 
 
 def is_frontend_input(relative: str) -> bool:
-    # Tailwind v4 会扫描整个前端项目树；测试、配置和维护脚本也可能改变候选类集合。
-    return relative.startswith("web/")
+    # source(none) 排除测试、README 和依赖目录，只保留生产 UI 构建输入。
+    path = pathlib.PurePosixPath(relative)
+    if (
+        relative in EXPLICIT_FILES
+        or relative.startswith("web/.env")
+        or relative.startswith("web/public/")
+    ):
+        return True
+    if not relative.startswith("web/src/"):
+        return False
+    return (
+        "__tests__" not in path.parts
+        and ".test." not in path.name
+        and ".spec." not in path.name
+        and path.name != "test-setup.ts"
+        and path.suffix != ".md"
+    )
 
 
 def selected_go_files(root: pathlib.Path, goarch: str) -> tuple[set[str], set[str]]:

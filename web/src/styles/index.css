@@ -16,7 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-@import 'tailwindcss';
+@import 'tailwindcss' source(none);
+@source '../../index.html';
+@source '../**/*.{js,jsx,ts,tsx}';
+@source not '../**/__tests__';
+@source not '../**/*.test.*';
+@source not '../**/*.spec.*';
+@source not '../test-setup.ts';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 @import '@fontsource-variable/public-sans';
