@@ -3,13 +3,13 @@ name: 发布 Seiya 标准构建输入
 on:
   push:
     tags:
-      - v1.0.0-rc.27-seiya.2
+      - v1.0.0-rc.27-seiya.3
   workflow_dispatch:
     inputs:
       tag:
         description: 必须已存在且精确指向发布提交的 tag
         required: true
-        default: v1.0.0-rc.27-seiya.2
+        default: v1.0.0-rc.27-seiya.3
       commit:
         description: 独立验收锁定的 40 位完整 commit
         required: true
@@ -31,7 +31,7 @@ permissions:
   contents: read
 
 env:
-  RELEASE_TAG: v1.0.0-rc.27-seiya.2
+  RELEASE_TAG: v1.0.0-rc.27-seiya.3
   GO_VERSION: 1.25.1
   BUN_VERSION: 1.4.0
 
@@ -112,7 +112,7 @@ jobs:
       - name: 上传构建结果
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: seiya-new-api-v1.0.0-rc.27-seiya.2
+          name: seiya-new-api-v1.0.0-rc.27-seiya.3
           path: dist/
           if-no-files-found: error
           retention-days: 1
@@ -139,7 +139,7 @@ jobs:
       - name: 下载构建结果
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: seiya-new-api-v1.0.0-rc.27-seiya.2
+          name: seiya-new-api-v1.0.0-rc.27-seiya.3
           path: dist/
       - name: 校验独立验收锁定的 manifest 摘要
         env:

@@ -57,7 +57,9 @@ grep -Fq 'git fetch --force --no-tags origin' "$workflow_file"
 test "$(grep -Fc '.github/scripts/seiya-release.sh verify-identity' "$workflow_file")" -eq 2
 # shellcheck disable=SC2016 # 这里匹配 GitHub expression 字面量。
 grep -Fq "if: \${{ github.event_name == 'workflow_dispatch' && inputs.publish }}" "$workflow_file"
+# shellcheck disable=SC2016 # 这里匹配 GitHub expression 字面量。
 grep -Fq 'test "$release_commit" = "$SELECTED_COMMIT"' "$workflow_file"
+# shellcheck disable=SC2016 # 这里匹配 GitHub expression 字面量。
 grep -Fq 'EXPECTED_MANIFEST: ${{ inputs.expected_manifest_sha256 }}' "$workflow_file"
 if grep -Eq '^[[:space:]]*uses: [^#]+@v[0-9]' "$workflow_file"; then
   echo '发布 workflow 含未铆钉到 commit 的 Action' >&2
@@ -194,7 +196,7 @@ import sys
 document = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
 assert set(document) == {"schema_version", "name", "version", "source", "inputs", "targets"}
 assert document["name"] == "new-api"
-assert document["version"] == "1.0.0-rc.27-seiya.2"
+assert document["version"] == "1.0.0-rc.27-seiya.3"
 assert set(document["source"]) == {"repository", "commit", "tag"}
 assert set(document["inputs"]) == {
     "toolchains", "source_date_epoch", "source_files", "build", "files"
